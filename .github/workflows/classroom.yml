@@ -1,0 +1,91 @@
+name: Autograding
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  checks: write
+  actions: read
+  contents: read
+
+jobs:
+  run-autograding-tests:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-classroom[bot]'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.6"
+          terraform_wrapper: false
+
+      - name: Terraform init (no backend, no Azure)
+        run: terraform -chdir=infra init -backend=false
+
+      - name: Format
+        id: fmt
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: "terraform fmt: code is formatted"
+          command: bash -c "grep -q 'resource \"azurerm_' infra/*.tf && terraform fmt -check -recursive infra"
+          timeout: 5
+          max-score: 1
+
+      - name: Validate
+        id: validate
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: "terraform validate: configuration is valid"
+          command: bash -c "grep -q 'resource \"azurerm_linux_virtual_machine\"' infra/*.tf && terraform -chdir=infra validate -no-tests"
+          timeout: 5
+          max-score: 1
+
+      - name: Resources
+        id: resources
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: "Resources and settings (mocked plan)"
+          command: terraform -chdir=infra test -filter=tests/resources.tftest.hcl
+          timeout: 10
+          max-score: 3
+
+      - name: Variables
+        id: variables
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: "Variables drive the plan; big VM refused"
+          command: terraform -chdir=infra test -filter=tests/variables.tftest.hcl
+          timeout: 10
+          max-score: 2
+
+      - name: Outputs
+        id: outputs
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: "Outputs after a mocked apply"
+          command: terraform -chdir=infra test -filter=tests/outputs.tftest.hcl
+          timeout: 10
+          max-score: 1
+
+      - name: Submission answered
+        id: submission
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: "SUBMISSION.md complete"
+          command: bash scripts/check-submission.sh
+          timeout: 5
+          max-score: 2
+
+      - name: Autograding Reporter
+        uses: classroom-resources/autograding-grading-reporter@v1
+        env:
+          FMT_RESULTS: "${{ steps.fmt.outputs.result }}"
+          VALIDATE_RESULTS: "${{ steps.validate.outputs.result }}"
+          RESOURCES_RESULTS: "${{ steps.resources.outputs.result }}"
+          VARIABLES_RESULTS: "${{ steps.variables.outputs.result }}"
+          OUTPUTS_RESULTS: "${{ steps.outputs.outputs.result }}"
+          SUBMISSION_RESULTS: "${{ steps.submission.outputs.result }}"
+        with:
+          runners: fmt,validate,resources,variables,outputs,submission

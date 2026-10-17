@@ -1,0 +1,19 @@
+# Terraform working files
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+tfplan
+
+# Your variable values (copy terraform.tfvars.example)
+*.tfvars
+!*.tfvars.example
+
+# Never commit credentials
+*.pem
+*.key
+.env
+id_*
+cao_lab*
